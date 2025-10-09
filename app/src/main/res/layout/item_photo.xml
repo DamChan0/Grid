@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="8dp"
+    android:gravity="center_vertical">
+
+    <!-- 사진이 들어갈 자리 -->
+    <ImageView
+        android:id="@+id/ivPhoto"
+        android:layout_width="127dp"
+        android:layout_height="151dp"
+        android:background="#E0E0E0"
+        android:scaleType="centerCrop"
+        android:src="@android:drawable/ic_menu_gallery" />
+
+    <!-- 제목이 들어갈 자리 -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:text="사진 제목 예시"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+</LinearLayout>
