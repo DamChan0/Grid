@@ -1,33 +1,39 @@
 package com.example.grid.view
 
-import android.os.Build
 import android.os.Bundle
-import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import coil.load
-import com.example.grid.data.model.Photo
 import com.example.grid.databinding.ActivityPhotoDetailBinding
 
 class PhotoDetail : AppCompatActivity() {
 
     private lateinit var binding: ActivityPhotoDetailBinding
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPhotoDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val photo = intent.getParcelableExtra("photo", Photo::class.java)
+        // PhotoAdapter에서 전달한 개별 데이터 받기
+        val title = intent.getStringExtra("TITLE")
+        val imageUri = intent.getStringExtra("URI")
+        val description = intent.getStringExtra("DESCRIPTION")
+        val id = intent.getIntExtra("ID", 0)
+        val timestamp = intent.getLongExtra("TIMESTAMP", 0L)
 
-        binding.ivDetailPhoto.load(photo?.imageUrl) {
+        // 이미지 로드
+        binding.ivDetailPhoto.load(imageUri) {
             crossfade(true)
             placeholder(android.R.drawable.ic_menu_gallery)
         }
 
-        binding.tvDetailTitle.text = photo?.title
-        binding.tvDescription.text = photo?.content
+        // 텍스트 설정
+        binding.tvDetailTitle.text = title ?: "제목 없음"
+        binding.tvDescription.text = description ?: "설명 없음"
 
-
+        // 뒤로가기 버튼 설정
+        binding.btnBack.setOnClickListener {
+            finish()
+        }
     }
 }

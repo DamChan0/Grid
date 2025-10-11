@@ -48,6 +48,10 @@ class PhotoAdapter(private val photoList: List<ImageEntity>) :
             intent.putExtra("DESCRIPTION", photo.description)
             intent.putExtra("ID", photo.id)
             intent.putExtra("TIMESTAMP", photo.timestamp)
+            
+            // 디버깅용 로그
+            android.util.Log.d("PhotoAdapter", "Starting PhotoDetail with title: ${photo.title}")
+            
             context.startActivity(intent)
         }
 
