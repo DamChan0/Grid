@@ -15,4 +15,24 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAddPhoto"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:contentDescription="Add Photo"
+        android:src="@drawable/plus_icon"
+        app:tint="@android:color/white"
+        tools:layout_editor_absoluteX="339dp"
+        tools:layout_editor_absoluteY="659dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.95"
+        app:layout_constraintVertical_bias="0.95"
+
+        />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
+

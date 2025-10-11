@@ -1,14 +1,18 @@
-package com.example.grid
+package com.example.grid.view.adapter
 
+import android.R
 import android.content.Intent
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
+import com.example.grid.data.model.Photo
 import com.example.grid.databinding.ItemPhotoBinding
-import androidx.core.content.ContextCompat.startActivity
+import com.example.grid.view.PhotoDetail
+import com.example.grid.data.local.ImageEntity
 
-class PhotoAdapter(private val photoList: List<Photo>) :
+
+class PhotoAdapter(private val photoList: List<ImageEntity>) :
     RecyclerView.Adapter<PhotoAdapter.ViewHolder>() {
 
     inner class ViewHolder(val binding: ItemPhotoBinding) :
@@ -31,18 +35,19 @@ class PhotoAdapter(private val photoList: List<Photo>) :
         val photo = photoList[position]
 
         holder.binding.tvTitle.text = photo.title
-        holder.binding.ivPhoto.load(photo.imageUrl) {
+        holder.binding.ivPhoto.load(photo.imageUri) {
             crossfade(true)
-            placeholder(android.R.drawable.ic_menu_gallery)
+            placeholder(R.drawable.ic_menu_gallery)
         }
 
         holder.binding.ivPhoto.setOnClickListener {
             val context = holder.itemView.context
             val intent = Intent(context, PhotoDetail::class.java)
-
-            intent.putExtra("PHOTO_TITLE", photo.title)
-            intent.putExtra("PHOTO_IMAGE_URL", photo.imageUrl)
-
+            intent.putExtra("TITLE", photo.title)
+            intent.putExtra("URI", photo.imageUri)
+            intent.putExtra("DESCRIPTION", photo.description)
+            intent.putExtra("ID", photo.id)
+            intent.putExtra("TIMESTAMP", photo.timestamp)
             context.startActivity(intent)
         }
 

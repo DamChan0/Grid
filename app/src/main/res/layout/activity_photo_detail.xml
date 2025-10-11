@@ -28,4 +28,14 @@
         android:padding="16dp"
         tools:text="사진 제목 예시" />
 
+    <TextView
+        android:id="@+id/tvDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="16dp"
+        android:textColor="#8E8E8E"
+        android:textSize="20sp"
+        tools:text="photo description" />
+
 </LinearLayout>

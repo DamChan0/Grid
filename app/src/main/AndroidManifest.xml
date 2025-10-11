@@ -15,11 +15,11 @@
         android:theme="@style/Theme.Grid"
         tools:targetApi="31">
         <activity
-            android:name=".PhotoDetail"
+            android:name=".view.PhotoDetail"
             android:exported="false"
             android:theme="@style/Theme.Grid" />
         <activity
-            android:name=".MainActivity"
+            android:name=".view.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.Grid">

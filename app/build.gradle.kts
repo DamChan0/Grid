@@ -1,6 +1,15 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    id("kotlin-parcelize")
+    id("com.google.devtools.ksp")
+}
+
+// KSP 설정 추가
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
+    arg("room.expandProjection", "true")
 }
 
 android {
@@ -14,6 +23,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -21,6 +31,10 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            isDebuggable = true
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -33,6 +47,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
         jvmTarget = "1.8"
     }
@@ -41,7 +56,7 @@ android {
         viewBinding = true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.1"
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packaging {
         resources {
@@ -50,7 +65,13 @@ android {
     }
 }
 
-dependencies {
+dependencies { // ✅ Room Database (KSP 버전)
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version") // 코루틴 지원
+    ksp("androidx.room:room-compiler:$room_version") // 어노테이션 프로세서
+
+    implementation("androidx.activity:activity-ktx:1.9.2")
     implementation("com.github.chrisbanes:PhotoView:2.3.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("io.coil-kt:coil:2.6.0") // Coil 이미지 로더
