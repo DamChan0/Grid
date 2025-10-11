@@ -28,6 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
                     "image_database"
                 )
                 .fallbackToDestructiveMigration()
+                .allowMainThreadQueries() // 디버깅용 (프로덕션에서는 제거)
                 .build()
                 INSTANCE = instance
                 instance

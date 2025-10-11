@@ -22,9 +22,16 @@ class PhotoDetail : AppCompatActivity() {
         val timestamp = intent.getLongExtra("TIMESTAMP", 0L)
 
         // 이미지 로드
-        binding.ivDetailPhoto.load(imageUri) {
+        val uri = android.net.Uri.parse(imageUri)
+        binding.ivDetailPhoto.load(uri) {
             crossfade(true)
             placeholder(android.R.drawable.ic_menu_gallery)
+            error(android.R.drawable.ic_menu_gallery)
+            listener(
+                onStart = { request -> android.util.Log.d("PhotoDetail", "Loading image: $uri") },
+                onSuccess = { request, result -> android.util.Log.d("PhotoDetail", "Image loaded successfully: $uri") },
+                onError = { request, result -> android.util.Log.e("PhotoDetail", "Failed to load image: $uri", result.throwable) }
+            )
         }
 
         // 텍스트 설정

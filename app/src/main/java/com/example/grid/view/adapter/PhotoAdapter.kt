@@ -34,10 +34,40 @@ class PhotoAdapter(private val photoList: List<ImageEntity>) :
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val photo = photoList[position]
 
+        android.util.Log.d(
+            "PhotoAdapter",
+            "Binding view for position $position, title: ${photo.title}, uri: ${photo.imageUri}"
+        )
+
         holder.binding.tvTitle.text = photo.title
-        holder.binding.ivPhoto.load(photo.imageUri) {
+
+        // URI를 Uri 객체로 변환하여 로드
+        val uri = android.net.Uri.parse(photo.imageUri)
+        
+        // Photo Picker URI인 경우 권한 확인
+        if (photo.imageUri.contains("picker_get_content")) {
+            android.util.Log.d("PhotoAdapter", "Photo Picker URI detected: $uri")
+        }
+        
+        holder.binding.ivPhoto.load(uri) {
             crossfade(true)
             placeholder(R.drawable.ic_menu_gallery)
+            error(R.drawable.ic_menu_gallery)
+            listener(
+                onStart = { request ->
+                    android.util.Log.d("PhotoAdapter", "Loading image: $uri")
+                },
+                onSuccess = { request, result ->
+                    android.util.Log.d("PhotoAdapter", "Image loaded successfully: $uri")
+                },
+                onError = { request, result ->
+                    android.util.Log.e("PhotoAdapter", "Failed to load image: $uri", result.throwable)
+                    // Photo Picker URI 권한 문제인 경우 특별 처리
+                    if (result.throwable is SecurityException) {
+                        android.util.Log.e("PhotoAdapter", "SecurityException - URI permission issue for Photo Picker")
+                    }
+                }
+            )
         }
 
         holder.binding.ivPhoto.setOnClickListener {
@@ -48,10 +78,13 @@ class PhotoAdapter(private val photoList: List<ImageEntity>) :
             intent.putExtra("DESCRIPTION", photo.description)
             intent.putExtra("ID", photo.id)
             intent.putExtra("TIMESTAMP", photo.timestamp)
-            
+
             // 디버깅용 로그
-            android.util.Log.d("PhotoAdapter", "Starting PhotoDetail with title: ${photo.title}")
-            
+            android.util.Log.d(
+                "PhotoAdapter",
+                "Starting PhotoDetail with title: ${photo.title}"
+            )
+
             context.startActivity(intent)
         }
 
