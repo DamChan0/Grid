@@ -25,4 +25,14 @@
         android:textSize="18sp"
         android:textStyle="bold" />
 
+    <!--   선택 상태 확인  -->
+    <LinearLayout
+        android:id="@+id/itemContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="?attr/selectableItemBackground">
+        ...
+    </LinearLayout>
 </LinearLayout>
