@@ -7,7 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.GridLayoutManager
 import com.example.grid.view.adapter.PhotoAdapter
+import com.example.grid.view.adapter.FolderAdapter
 import com.example.grid.R
 import com.example.grid.databinding.ActivityMainBinding
 import com.example.grid.ui.theme.GridTheme
@@ -16,6 +18,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import com.example.grid.data.local.AppDatabase
 import com.example.grid.data.local.ImageEntity
+import com.example.grid.data.local.FolderEntity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import android.Manifest
@@ -24,25 +27,39 @@ import android.app.AlertDialog
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
+import android.view.LayoutInflater
+import android.widget.EditText
+import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var binding: ActivityMainBinding           // ActivityMainBinding 클래스 선언
-    private val photoList =
-        mutableListOf<ImageEntity>()              // Photo 클래스 리스트 선언
-    private lateinit var database: AppDatabase                // AppDatabase 클래스 선언
-    private lateinit var photoAdapter: PhotoAdapter           // PhotoAdapter 클래스 선언
+    private lateinit var binding: ActivityMainBinding
+    private val photoList = mutableListOf<ImageEntity>()
+    private val folderList = mutableListOf<FolderEntity>()  // ✅ 폴더 리스트 추가
+    private lateinit var database: AppDatabase
+    private lateinit var photoAdapter: PhotoAdapter
+    private lateinit var folderAdapter: FolderAdapter  // ✅ 폴더 어댑터 추가
     private val selectedPositions = mutableSetOf<Int>()
     private var actionMode: ActionMode? = null
+    private var currentFolderPosition: Int? = null
+
+    // ✅ 뷰 모드 관리
+    private var viewMode: ViewMode = ViewMode.FOLDERS
+    private var currentFolderId: Int? = null
+
+    enum class ViewMode {
+        FOLDERS,  // 폴더 목록 보기
+        IMAGES    // 이미지 목록 보기
+    }
 
     // gallery 에서 이미지를 가져오기 위한 ActivityResultLauncher 초기화
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let { // RoomDB에 이미지 저장
-            saveImageToDatabase(it)
+        uri?.let { // ✅ 폴더 선택 다이얼로그 표시로 변경k
+            showFolderSelectionDialog(it, currentFolderPosition)
         }
     }
 
@@ -83,24 +100,60 @@ class MainActivity : ComponentActivity() {
             "MainActivity", "PhotoAdapter created with ${photoList.size} items"
         )
 
-        binding.recyclerView.layoutManager = LinearLayoutManager(this)
+        // ✅ FolderAdapter 초기화
+        folderAdapter =
+            FolderAdapter(folderList, mutableMapOf(), onFolderClick = { folder ->
+                openFolder(folder)
+            }, onFolderLongClick = { folder ->
+                android.util.Log.d(
+                    "MainActivity", "Folder long-clicked: ${folder.name}"
+                )
+            })
 
-        // this allocating adpater is call onBindViewHolder onCreateViewHolder at the same time
-        binding.recyclerView.adapter = photoAdapter
+        // ✅ 초기에는 GridLayout (2열)으로 폴더 표시
+        binding.recyclerView.layoutManager = GridLayoutManager(this, 2)
+        binding.recyclerView.adapter = folderAdapter
 
-        // ✅ "사진 추가" 버튼 클릭 시 갤러리 열기
+        // ✅ FAB 버튼 동작 - 뷰 모드에 따라 다른 동작
         binding.fabAddPhoto.setOnClickListener {
-            pickImageLauncher.launch("image/*")
+            if (viewMode == ViewMode.FOLDERS) {
+                showCreateFolderDialog()  // 폴더 생성
+            } else {
+                pickImageLauncher.launch("image/*")  // 이미지 추가
+            }
         }
 
         // 권한 확인 및 요청
         checkPermissions()
 
-        // 앱 시작 시 데이터베이스에서 이미지 로드
-        loadImagesFromDatabase()
+        // ✅ 앱 시작 시 폴더 목록 로드
+        loadFolders()
 
         // 디버깅용: 데이터베이스 상태 확인
         checkDatabaseStatus()
+
+        // ✅ 뒤로가기 처리 (OnBackPressedDispatcher 사용)
+        onBackPressedDispatcher.addCallback(
+            this, object : androidx.activity.OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (viewMode == ViewMode.IMAGES) { // 이미지 뷰에서 폴더 뷰로 돌아가기
+                        viewMode = ViewMode.FOLDERS
+                        currentFolderId = null
+
+                        binding.recyclerView.layoutManager =
+                            GridLayoutManager(this@MainActivity, 2)
+                        binding.recyclerView.adapter = folderAdapter
+
+                        loadFolders()
+
+                        // 상단 텍스트를 "갤러리"로 변경
+                        binding.tvCurrentFolder.text = "/home"
+                    } else { // 기본 뒤로가기 동작
+                        isEnabled = false
+                        this@MainActivity.onBackPressedDispatcher.onBackPressed()
+                    }
+                }
+            })
     }
 
     private fun startSelectionMode(position: Int) {
@@ -243,87 +296,22 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onResume() {
-        super.onResume() // 앱이 다시 활성화될 때마다 데이터 새로고침
-        loadImagesFromDatabase()
-    }
+        super.onResume()
 
+        // ✅ 현재 뷰 모드에 따라 적절한 데이터 로드
+        when (viewMode) {
+            ViewMode.FOLDERS -> { // 폴더 목록 뷰: 폴더 목록 새로고침
+                loadFolders()
+            }
 
-    private fun loadImagesFromDatabase() {
-        lifecycleScope.launch { // 코루틴 시작
-            try {
-                android.util.Log.d("MainActivity", "Loading images from database...")
-                val images = database.imageDao().getAllImages()
-                android.util.Log.d(
-                    "MainActivity", "Loaded ${images.size} images from database"
-                )
-
-                // 데이터베이스가 비어있는 경우 로그
-                if (images.isEmpty()) {
-                    android.util.Log.w(
-                        "MainActivity", "Database is empty - no images found"
-                    )
-                } else { // 각 이미지 정보 로그
-                    images.forEachIndexed { index, image ->
-                        android.util.Log.d(
-                            "MainActivity",
-                            "Image $index: ${image.title} - ${image.imageUri}"
-                        )
-                    }
+            ViewMode.IMAGES -> { // 이미지 목록 뷰: 현재 폴더의 이미지만 새로고침
+                currentFolderId?.let { folderId ->
+                    loadImagesFromFolder(folderId)
                 }
-
-                photoList.clear()
-                photoList.addAll(images)
-
-                android.util.Log.d(
-                    "MainActivity", "Updated photoList size: ${photoList.size}"
-                )
-
-                // UI 스레드에서 어댑터 업데이트
-                runOnUiThread {
-                    photoAdapter.notifyDataSetChanged()
-                    android.util.Log.d(
-                        "MainActivity", "Adapter notified of data change"
-                    )
-
-                    // RecyclerView 강제 새로고침
-                    binding.recyclerView.invalidate()
-                    binding.recyclerView.requestLayout()
-                }
-            } catch (e: Exception) { // 에러 처리
-                android.util.Log.e("MainActivity", "Error loading images", e)
-                e.printStackTrace()
             }
         }
     }
 
-    // RoomDB에 이미지 저장하는 함수
-    private fun saveImageToDatabase(uri: Uri) {
-        lifecycleScope.launch {
-            try { // URI 권한 부여 (Photo Picker URI의 경우 필요)
-                contentResolver.takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-
-                // 이미지를 앱 내부 저장소로 복사
-                val copiedUri = copyImageToInternalStorage(uri)
-
-                val newImage = ImageEntity(
-                    title = "새 이미지",
-                    imageUri = copiedUri?.toString() ?: uri.toString(),
-                    description = "갤러리에서 추가된 사진"
-                )
-                database.imageDao().insertImage(newImage)
-
-                // DB에 저장 후 목록 다시 로드
-                loadImagesFromDatabase()
-            } catch (e: Exception) { // 에러 처리
-                android.util.Log.e(
-                    "MainActivity", "Error saving image to database", e
-                )
-                e.printStackTrace()
-            }
-        }
-    }
 
     // 이미지를 앱 내부 저장소로 복사하는 함수
     private fun copyImageToInternalStorage(uri: Uri): Uri? {
@@ -346,6 +334,207 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "Error copying image", e)
             null
+        }
+    }
+
+    // ==================== 폴더 관련 메서드 ====================
+
+    /**
+     * 폴더 목록을 데이터베이스에서 로드합니다
+     */
+    private fun loadFolders() {
+        lifecycleScope.launch {
+            try {
+                android.util.Log.d("MainActivity", "loadFolders() 시작")
+
+                val folders = database.folderDao().getAllFolders()
+                android.util.Log.d("MainActivity", "DB에서 가져온 폴더 개수: ${folders.size}")
+
+                folderList.clear()
+                folderList.addAll(folders)
+
+                // 각 폴더의 이미지 개수 가져오기
+                folders.forEach { folder ->
+                    val count = database.folderDao().getImageCountInFolder(folder.id)
+                    folderAdapter.updateImageCount(folder.id, count)
+                }
+
+                folderAdapter.notifyDataSetChanged()
+                android.util.Log.d("MainActivity", "Loaded ${folders.size} folders")
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error loading folders", e)
+            }
+        }
+    }
+
+    /**
+     * 폴더를 열어 해당 폴더의 이미지 목록을 표시합니다
+     */
+    private fun openFolder(folder: FolderEntity) {
+        viewMode = ViewMode.IMAGES
+        currentFolderId = folder.id
+        currentFolderPosition = folderList.indexOf(folder)
+
+        // RecyclerView를 LinearLayout으로 변경
+        binding.recyclerView.layoutManager = LinearLayoutManager(this)
+        binding.recyclerView.adapter = photoAdapter
+
+        // 해당 폴더의 이미지들 로드
+        loadImagesFromFolder(folder.id)
+
+        // 상단에 현재 경로를 Linux 스타일로 표시
+        binding.tvCurrentFolder.text = "/home/${folder.name}"
+
+        android.util.Log.d("MainActivity", "Opened folder: ${folder.name}")
+    }
+
+    /**
+     * 특정 폴더의 이미지들을 로드합니다
+     */
+    private fun loadImagesFromFolder(folderId: Int) {
+        lifecycleScope.launch {
+            try {
+                val images = database.imageDao().getImagesByFolder(folderId)
+                photoList.clear()
+                photoList.addAll(images)
+                photoAdapter.notifyDataSetChanged()
+
+                android.util.Log.d(
+                    "MainActivity",
+                    "Loaded ${images.size} images from folder $folderId"
+                )
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "MainActivity", "Error loading images from folder", e
+                )
+            }
+        }
+    }
+
+    /**
+     * 새 폴더 생성 다이얼로그를 표시합니다
+     */
+    private fun showCreateFolderDialog() {
+        val dialogView =
+            LayoutInflater.from(this).inflate(R.layout.dialog_create_folder, null)
+        val etFolderName = dialogView.findViewById<EditText>(R.id.etFolderName)
+
+        AlertDialog.Builder(this).setView(dialogView)
+                .setPositiveButton("생성") { _, _ ->
+                    val folderName = etFolderName.text.toString().trim()
+                    if (folderName.isNotEmpty()) {
+                        createFolder(folderName)
+                    } else {
+                        Toast.makeText(this, "폴더 이름을 입력하세요", Toast.LENGTH_SHORT)
+                                .show()
+                    }
+                }.setNegativeButton("취소", null).show()
+    }
+
+    /**
+     * 폴더를 생성합니다
+     */
+    private fun createFolder(folderName: String) {
+        lifecycleScope.launch {
+            try { // 같은 이름의 폴더가 있는지 확인
+                val existingFolder = database.folderDao().getFolderByName(folderName)
+                if (existingFolder != null) {
+                    Toast.makeText(
+                        this@MainActivity, "같은 이름의 폴더가 이미 존재합니다", Toast.LENGTH_SHORT
+                    ).show()
+                    return@launch
+                }
+
+                val newFolder = FolderEntity(name = folderName)
+                val folderId = database.folderDao().insertFolder(newFolder)
+
+                // UI 업데이트
+                val createdFolder = newFolder.copy(id = folderId.toInt())
+                folderAdapter.addFolder(createdFolder)
+
+                Toast.makeText(
+                    this@MainActivity, "폴더가 생성되었습니다", Toast.LENGTH_SHORT
+                ).show()
+
+                android.util.Log.d("MainActivity", "Created folder: $folderName")
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error creating folder", e)
+                Toast.makeText(
+                    this@MainActivity, "폴더 생성에 실패했습니다", Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    /**
+     * 이미지 추가 시 폴더 선택 다이얼로그를 표시합니다
+     */
+    private fun showFolderSelectionDialog(imageUri: Uri, folderPosition: Int?) {
+        lifecycleScope.launch {
+            // 현재 폴더에 자동 추가 (폴더 안에 있을 때)
+            if (folderPosition != null && folderPosition >= 0 && folderPosition < folderList.size) {
+                val currentFolder = folderList[folderPosition]
+                saveImageToDatabase(imageUri, currentFolder.id)
+                return@launch
+            }
+            
+            // 폴더 목록에서 선택
+            val folders = database.folderDao().getAllFolders()
+            
+            if (folders.isEmpty()) { // 폴더가 없으면 먼저 폴더를 생성하도록 안내
+                AlertDialog.Builder(this@MainActivity).setTitle("폴더가 없습니다")
+                        .setMessage("먼저 폴더를 생성해주세요").setPositiveButton("확인", null)
+                        .show()
+                return@launch
+            }
+
+            // 폴더 이름 배열 생성
+            val folderNames = folders.map { it.name }.toTypedArray()
+
+            AlertDialog.Builder(this@MainActivity).setTitle("폴더 선택")
+                    .setItems(folderNames) { _, which ->
+                        val selectedFolder = folders[which]
+                        saveImageToDatabase(imageUri, selectedFolder.id)
+                    }.setNegativeButton("취소", null).show()
+        }
+    }
+
+    /**
+     * 이미지를 데이터베이스에 저장합니다 (폴더 ID 포함)
+     */
+    private fun saveImageToDatabase(uri: Uri, folderId: Int) {
+        lifecycleScope.launch {
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+
+                val copiedUri = copyImageToInternalStorage(uri)
+
+                val newImage = ImageEntity(
+                    title = "새 이미지",
+                    imageUri = copiedUri?.toString() ?: uri.toString(),
+                    description = "갤러리에서 추가된 사진",
+                    folderId = folderId
+                )
+                database.imageDao().insertImage(newImage)
+
+                // 현재 폴더를 보고 있다면 목록 다시 로드
+                if (viewMode == ViewMode.IMAGES && currentFolderId == folderId) {
+                    loadImagesFromFolder(folderId)
+                }
+
+                Toast.makeText(
+                    this@MainActivity, "이미지가 추가되었습니다", Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: Exception) {
+                android.util.Log.e(
+                    "MainActivity", "Error saving image to database", e
+                )
+                Toast.makeText(
+                    this@MainActivity, "이미지 저장에 실패했습니다", Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 

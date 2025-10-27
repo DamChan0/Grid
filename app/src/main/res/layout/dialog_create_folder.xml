@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 폴더 생성 다이얼로그 레이아웃 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <!-- 다이얼로그 제목 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="새 폴더 만들기"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 폴더 이름 입력 -->
+    <EditText
+        android:id="@+id/etFolderName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="폴더 이름을 입력하세요"
+        android:inputType="text"
+        android:maxLines="1"
+        android:imeOptions="actionDone" />
+
+</LinearLayout>
+

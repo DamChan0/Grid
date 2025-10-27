@@ -10,6 +10,14 @@ interface ImageDao {
     // 모든 이미지들을 id 내림차순(최신순)으로 가져오기
     @Query("SELECT * FROM images ORDER BY id DESC")
     suspend fun getAllImages(): List<ImageEntity>
+    
+    /**
+     * 특정 폴더에 속한 이미지들을 가져옵니다.
+     * @param folderId 조회할 폴더 ID
+     * @return 해당 폴더의 이미지 리스트 (최신순)
+     */
+    @Query("SELECT * FROM images WHERE folderId = :folderId ORDER BY id DESC")
+    suspend fun getImagesByFolder(folderId: Int): List<ImageEntity>
 
     // 이미지 1개 추가하기
     @Insert

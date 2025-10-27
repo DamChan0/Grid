@@ -8,13 +8,14 @@ import androidx.room.RoomDatabase
 
 
 @Database(
-    entities = [ImageEntity::class], 
-    version = 1,
+    entities = [ImageEntity::class, FolderEntity::class],  // FolderEntity 추가
+    version = 2,  // 버전 증가 (스키마 변경)
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun imageDao(): ImageDao
+    abstract fun folderDao(): FolderDao  // FolderDao 추가
 
     companion object {
         @Volatile
