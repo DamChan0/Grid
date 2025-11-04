@@ -12,6 +12,7 @@ import com.example.grid.view.adapter.PhotoAdapter
 import com.example.grid.view.adapter.FolderAdapter
 import com.example.grid.R
 import com.example.grid.databinding.ActivityMainBinding
+import com.example.grid.databinding.DialogSelectCreateTypeBinding
 import com.example.grid.ui.theme.GridTheme
 import android.net.Uri
 import androidx.activity.result.ActivityResultLauncher
@@ -28,10 +29,13 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.grid.view.MainActivity.ViewMode.IMAGES
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -58,8 +62,8 @@ class MainActivity : ComponentActivity() {
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
-        uri?.let { // ✅ 폴더 선택 다이얼로그 표시로 변경k
-            showFolderSelectionDialog(it, currentFolderPosition)
+        uri?.let { // ✅ 항상 폴더 선택 다이얼로그 표시
+            showFolderSelectionDialog(it, null)
         }
     }
 
@@ -117,10 +121,11 @@ class MainActivity : ComponentActivity() {
         // ✅ FAB 버튼 동작 - 뷰 모드에 따라 다른 동작
         binding.fabAddPhoto.setOnClickListener {
             if (viewMode == ViewMode.FOLDERS) {
-                showCreateFolderDialog()  // 폴더 생성
+                showSelectCreateType()  // 타입 선택 다이얼로그 (폴더 생성 OR 이미지 추가)
             } else {
                 pickImageLauncher.launch("image/*")  // 이미지 추가
             }
+            loadFolders()
         }
 
         // 권한 확인 및 요청
@@ -136,7 +141,7 @@ class MainActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(
             this, object : androidx.activity.OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
-                    if (viewMode == ViewMode.IMAGES) { // 이미지 뷰에서 폴더 뷰로 돌아가기
+                    if (viewMode == IMAGES) { // 이미지 뷰에서 폴더 뷰로 돌아가기
                         viewMode = ViewMode.FOLDERS
                         currentFolderId = null
 
@@ -304,7 +309,7 @@ class MainActivity : ComponentActivity() {
                 loadFolders()
             }
 
-            ViewMode.IMAGES -> { // 이미지 목록 뷰: 현재 폴더의 이미지만 새로고침
+            IMAGES -> { // 이미지 목록 뷰: 현재 폴더의 이미지만 새로고침
                 currentFolderId?.let { folderId ->
                     loadImagesFromFolder(folderId)
                 }
@@ -371,7 +376,7 @@ class MainActivity : ComponentActivity() {
      * 폴더를 열어 해당 폴더의 이미지 목록을 표시합니다
      */
     private fun openFolder(folder: FolderEntity) {
-        viewMode = ViewMode.IMAGES
+        viewMode = IMAGES
         currentFolderId = folder.id
         currentFolderPosition = folderList.indexOf(folder)
 
@@ -409,6 +414,34 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /**
+     * 타입 선택 다이얼로그를 표시합니다 (폴더 생성 OR 이미지 추가)
+     * 하단에 BottomSheetDialog로 표시됩니다
+     */
+    private fun showSelectCreateType() {
+        val binding = DialogSelectCreateTypeBinding.inflate(
+            LayoutInflater.from(this)  // this = 현재 앱의 정보를 가지고 있는 Context
+        )
+
+        val bottomSheetDialog = BottomSheetDialog(this)
+        bottomSheetDialog.setContentView(binding.root as View)
+
+        binding.btnCreateFolder.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            showCreateFolderDialog()  // 기존 폴더 생성 다이얼로그 호출
+        }
+
+        binding.btnAddImage.setOnClickListener {
+            bottomSheetDialog.dismiss()
+            pickImageLauncher.launch("image/*")  // 이미지 선택기 실행
+        }
+
+        bottomSheetDialog.show()
+
+        // refresh the main folder list 
+        loadFolders()
     }
 
     /**
@@ -470,17 +503,16 @@ class MainActivity : ComponentActivity() {
      * 이미지 추가 시 폴더 선택 다이얼로그를 표시합니다
      */
     private fun showFolderSelectionDialog(imageUri: Uri, folderPosition: Int?) {
-        lifecycleScope.launch {
-            // 현재 폴더에 자동 추가 (폴더 안에 있을 때)
+        lifecycleScope.launch { // 현재 폴더에 자동 추가 (폴더 안에 있을 때)
             if (folderPosition != null && folderPosition >= 0 && folderPosition < folderList.size) {
                 val currentFolder = folderList[folderPosition]
                 saveImageToDatabase(imageUri, currentFolder.id)
                 return@launch
             }
-            
+
             // 폴더 목록에서 선택
             val folders = database.folderDao().getAllFolders()
-            
+
             if (folders.isEmpty()) { // 폴더가 없으면 먼저 폴더를 생성하도록 안내
                 AlertDialog.Builder(this@MainActivity).setTitle("폴더가 없습니다")
                         .setMessage("먼저 폴더를 생성해주세요").setPositiveButton("확인", null)
@@ -493,10 +525,18 @@ class MainActivity : ComponentActivity() {
 
             AlertDialog.Builder(this@MainActivity).setTitle("폴더 선택")
                     .setItems(folderNames) { _, which ->
-                        val selectedFolder = folders[which]
-                        saveImageToDatabase(imageUri, selectedFolder.id)
+                        onFolderSelectedForImage(imageUri, folders, which)
                     }.setNegativeButton("취소", null).show()
         }
+    }
+
+    /**
+     * 이미지 추가 시 폴더 선택 콜백 함수
+     * 람다 대신 별도 함수로 분리하여 디버깅 시 스택 트레이스를 명확하게 확인할 수 있도록 함
+     */
+    private fun onFolderSelectedForImage(imageUri: Uri, folders: List<FolderEntity>, selectedIndex: Int) {
+        val selectedFolder = folders[selectedIndex]
+        saveImageToDatabase(imageUri, selectedFolder.id)
     }
 
     /**
@@ -520,8 +560,15 @@ class MainActivity : ComponentActivity() {
                 database.imageDao().insertImage(newImage)
 
                 // 현재 폴더를 보고 있다면 목록 다시 로드
-                if (viewMode == ViewMode.IMAGES && currentFolderId == folderId) {
+                if (viewMode == IMAGES && currentFolderId == folderId) {
                     loadImagesFromFolder(folderId)
+                }
+
+                // 폴더 목록 화면에 있을 때도 폴더의 이미지 개수 즉시 업데이트
+                if (viewMode == ViewMode.FOLDERS) {
+                    val newCount =
+                        database.folderDao().getImageCountInFolder(folderId)
+                    folderAdapter.updateImageCount(folderId, newCount)
                 }
 
                 Toast.makeText(
